@@ -12,7 +12,7 @@ export async function getFileSizeInKB(filePath) {
   try {
     const stats = await fs.stat(filePath);
     const fileSizeInBytes = stats.size;
-    const fileSizeInKB = fileSizeInBytes / 1024; // Convert bytes to kilobytes
+    const fileSizeInKB = fileSizeInBytes / 1024;
     return fileSizeInKB.toFixed(2);
   } catch (error) {
     console.error(`Error getting file size: ${error}`);

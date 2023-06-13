@@ -4,7 +4,11 @@ import sharp from 'sharp';
 import fs from 'fs/promises';
 import path from 'path';
 import { nanoid } from 'nanoid';
-import { downloadImage, getFileSizeInKB, getImageDimensions } from './src/utils.js';
+import {
+  downloadImage,
+  getFileSizeInKB,
+  getImageDimensions,
+} from './src/utils.js';
 
 config();
 
@@ -20,17 +24,28 @@ app.get('/resize', async (req, res) => {
 
   try {
     const directory = path.dirname(new URL(import.meta.url).pathname);
-    const tempFilePath = path.join(directory, 'files', `temp_${nanoid(10)}.jpg`);
+    const tempFilePath = path.join(
+      directory,
+      'files',
+      `temp_${nanoid(10)}.jpg`
+    );
 
     await downloadImage(image, tempFilePath);
     const originalFileSizeInKB = await getFileSizeInKB(tempFilePath);
 
-    const { width: originalWidth, height: originalHeight } = await getImageDimensions(tempFilePath);
-    console.log(`Original image: ${image} (${originalWidth}x${originalHeight}) [${blur || 0}]`);
+    const { width: originalWidth, height: originalHeight } =
+      await getImageDimensions(tempFilePath);
+    console.log(
+      `Original image: ${image} (${originalWidth}x${originalHeight}) [${
+        blur || 0
+      }]`
+    );
     // const rotation = await getImageRotation(tempFilePath);
 
     const targetWidth = parseInt(width);
-    const targetHeight = Math.round((targetWidth * originalHeight) / originalWidth);
+    const targetHeight = Math.round(
+      (targetWidth * originalHeight) / originalWidth
+    );
 
     let sharpInstance = sharp(tempFilePath);
 
@@ -54,8 +69,12 @@ app.get('/resize', async (req, res) => {
     const resizedHeight = resizedImageDimensions.height;
 
     const sizeInKB = Buffer.byteLength(buffer) / 1024;
-    const sizesDifference = Math.abs(((sizeInKB / originalFileSizeInKB) - 1) * 100).toFixed(2);
-    console.log(`New image is ${sizesDifference}% less in size - ${sizeInKB.toFixed(2)}Kb`);
+    const sizesDifference = Math.abs(
+      (sizeInKB / originalFileSizeInKB - 1) * 100
+    ).toFixed(2);
+    console.log(
+      `New image is ${sizesDifference}% less in size - ${sizeInKB.toFixed(2)}Kb`
+    );
 
     res.set('Content-Type', 'image/jpeg');
     res.set('Content-Length', buffer.length);
