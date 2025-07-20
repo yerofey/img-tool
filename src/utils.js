@@ -1,11 +1,17 @@
-import fs from 'fs/promises';
-import axios from 'axios';
 import sizeOf from 'image-size';
 import piexif from 'piexifjs';
+import fs from 'node:fs/promises';
 
 export async function downloadImage(url, filePath) {
-  const response = await axios.get(url, { responseType: 'arraybuffer' });
-  await fs.writeFile(filePath, Buffer.from(response.data, 'binary'));
+  const response = await fetch(url);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+  }
+  
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  await fs.writeFile(filePath, buffer);
 }
 
 export async function getFileSizeInKB(filePath) {
@@ -47,5 +53,41 @@ export async function getImageRotation(filePath) {
   } catch (error) {
     console.error(`Error fetching image rotation: ${error}`);
     throw error;
+  }
+}
+
+export function generateSuggestedFilename(imageUrl, operation, options = {}) {
+  try {
+    const url = new URL(imageUrl);
+    const pathname = url.pathname;
+    const filename = pathname.split('/').pop() || 'image';
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+    const originalExt = filename.match(/\.[^/.]+$/)?.[0] || '';
+    
+    let suffix = '';
+    let newExt = originalExt;
+    
+    if (operation === 'resize') {
+      const { width, blur } = options;
+      suffix = `_${width}w`;
+      if (blur && parseInt(blur) > 0) {
+        suffix += `_blur${blur}`;
+      }
+    } else if (operation === 'convert') {
+      const { quality } = options;
+      newExt = '.webp';
+      if (quality && parseInt(quality) !== 80) {
+        suffix = `_q${quality}`;
+      }
+    }
+    
+    return `${nameWithoutExt}${suffix}${newExt}`;
+  } catch (error) {
+    // Fallback for invalid URLs
+    const timestamp = Date.now();
+    if (operation === 'convert') {
+      return `converted_${timestamp}.webp`;
+    }
+    return `resized_${timestamp}.jpg`;
   }
 }

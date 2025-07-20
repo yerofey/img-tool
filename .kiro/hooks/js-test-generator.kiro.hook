@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "JS Test Generator",
+  "description": "Automatically creates basic tests for JavaScript files when they are updated, if tests don't already exist",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.js"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A JavaScript file has been updated. Please analyze the file and create basic tests for it if tests don't already exist. Focus on testing the main functions, edge cases, and error handling. Use a testing framework appropriate for the project (likely Jest or Node.js built-in test runner). Create the test file in an appropriate location (e.g., __tests__ folder or alongside the source file with .test.js extension)."
+  }
+}
