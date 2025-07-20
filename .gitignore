@@ -3,3 +3,7 @@ node_modules/
 .vscode/
 .editorconfig
 .env
+
+# Test coverage reports
+coverage/
+*.lcov
