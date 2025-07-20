@@ -4,11 +4,11 @@ import fs from 'node:fs/promises';
 
 export async function downloadImage(url, filePath) {
   const response = await fetch(url);
-  
+
   if (!response.ok) {
     throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
   }
-  
+
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   await fs.writeFile(filePath, buffer);
@@ -21,7 +21,9 @@ export async function getFileSizeInKB(filePath) {
     const fileSizeInKB = fileSizeInBytes / 1024;
     return fileSizeInKB.toFixed(2);
   } catch (error) {
-    console.error(`Error getting file size: ${error}`);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(`Error getting file size: ${error}`);
+    }
     throw error;
   }
 }
@@ -31,7 +33,9 @@ export async function getImageDimensions(filePath) {
     const dimensions = sizeOf(filePath);
     return dimensions;
   } catch (error) {
-    console.error(`Error fetching image dimensions: ${error}`);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(`Error fetching image dimensions: ${error}`);
+    }
     throw error;
   }
 }
@@ -51,7 +55,9 @@ export async function getImageRotation(filePath) {
     }
     return degrees;
   } catch (error) {
-    console.error(`Error fetching image rotation: ${error}`);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(`Error fetching image rotation: ${error}`);
+    }
     throw error;
   }
 }
@@ -63,10 +69,10 @@ export function generateSuggestedFilename(imageUrl, operation, options = {}) {
     const filename = pathname.split('/').pop() || 'image';
     const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
     const originalExt = filename.match(/\.[^/.]+$/)?.[0] || '';
-    
+
     let suffix = '';
     let newExt = originalExt;
-    
+
     if (operation === 'resize') {
       const { width, blur } = options;
       suffix = `_${width}w`;
@@ -80,7 +86,7 @@ export function generateSuggestedFilename(imageUrl, operation, options = {}) {
         suffix = `_q${quality}`;
       }
     }
-    
+
     return `${nameWithoutExt}${suffix}${newExt}`;
   } catch (error) {
     // Fallback for invalid URLs

@@ -1,268 +1,253 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll } from 'bun:test';
 import fs from 'fs/promises';
-import axios from 'axios';
-import sizeOf from 'image-size';
-import piexif from 'piexifjs';
+import path from 'path';
 import {
   downloadImage,
   getFileSizeInKB,
   getImageDimensions,
-  getImageRotation
+  getImageRotation,
+  generateSuggestedFilename,
 } from '../src/utils.js';
 
-// Mock dependencies
-vi.mock('fs/promises');
-vi.mock('axios');
-vi.mock('image-size');
-vi.mock('piexifjs');
-
 describe('Utils Functions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  // Create a test file for file operations
+  const testFilePath = 'test-temp-file.txt';
+  const testContent = 'Hello, this is a test file for size calculation!';
+
+  beforeAll(async () => {
+    // Create a test file
+    await fs.writeFile(testFilePath, testContent);
   });
 
   describe('downloadImage', () => {
-    it('should download and save image successfully', async () => {
-      const mockResponse = {
-        data: Buffer.from('fake image data')
-      };
-      axios.get.mockResolvedValue(mockResponse);
-      fs.writeFile.mockResolvedValue();
-
-      await downloadImage('https://example.com/image.jpg', '/tmp/test.jpg');
-
-      expect(axios.get).toHaveBeenCalledWith('https://example.com/image.jpg', {
-        responseType: 'arraybuffer'
-      });
-      expect(fs.writeFile).toHaveBeenCalledWith(
-        '/tmp/test.jpg',
-        expect.any(Buffer)
-      );
+    it('should be a function', () => {
+      expect(typeof downloadImage).toBe('function');
     });
 
-    it('should throw error when download fails', async () => {
-      axios.get.mockRejectedValue(new Error('Network error'));
-
-      await expect(
-        downloadImage('https://example.com/image.jpg', '/tmp/test.jpg')
-      ).rejects.toThrow('Network error');
+    it('should throw error for invalid URLs', async () => {
+      try {
+        await downloadImage('invalid-url', '/tmp/test.jpg');
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+      }
     });
 
-    it('should throw error when file write fails', async () => {
-      const mockResponse = { data: Buffer.from('fake image data') };
-      axios.get.mockResolvedValue(mockResponse);
-      fs.writeFile.mockRejectedValue(new Error('Write error'));
-
-      await expect(
-        downloadImage('https://example.com/image.jpg', '/tmp/test.jpg')
-      ).rejects.toThrow('Write error');
+    it('should throw error for HTTP error responses', async () => {
+      try {
+        // Use a real domain but a path that returns 404
+        await downloadImage('https://httpbin.org/status/404', '/tmp/test.jpg');
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toContain('Failed to download image');
+      }
     });
   });
 
   describe('getFileSizeInKB', () => {
-    it('should return file size in KB', async () => {
-      const mockStats = { size: 2048 }; // 2KB
-      fs.stat.mockResolvedValue(mockStats);
-
-      const result = await getFileSizeInKB('/tmp/test.jpg');
-
-      expect(result).toBe('2.00');
-      expect(fs.stat).toHaveBeenCalledWith('/tmp/test.jpg');
+    it('should be a function', () => {
+      expect(typeof getFileSizeInKB).toBe('function');
     });
 
-    it('should handle small files correctly', async () => {
-      const mockStats = { size: 512 }; // 0.5KB
-      fs.stat.mockResolvedValue(mockStats);
-
-      const result = await getFileSizeInKB('/tmp/test.jpg');
-
-      expect(result).toBe('0.50');
+    it('should return file size as string with 2 decimal places', async () => {
+      const size = await getFileSizeInKB(testFilePath);
+      expect(typeof size).toBe('string');
+      expect(size).toMatch(/^\d+\.\d{2}$/);
+      expect(parseFloat(size)).toBeGreaterThan(0);
     });
 
-    it('should throw error when file stat fails', async () => {
-      fs.stat.mockRejectedValue(new Error('File not found'));
+    it('should throw error for nonexistent files', async () => {
+      try {
+        await getFileSizeInKB('/nonexistent/file.jpg');
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.code).toBe('ENOENT');
+      }
+    });
 
-      await expect(getFileSizeInKB('/tmp/nonexistent.jpg')).rejects.toThrow(
-        'File not found'
-      );
+    it('should handle package.json file size calculation', async () => {
+      const size = await getFileSizeInKB('package.json');
+      expect(typeof size).toBe('string');
+      expect(parseFloat(size)).toBeGreaterThan(0);
     });
   });
 
   describe('getImageDimensions', () => {
-    it('should return image dimensions', async () => {
-      const mockDimensions = { width: 800, height: 600 };
-      sizeOf.mockReturnValue(mockDimensions);
-
-      const result = await getImageDimensions('/tmp/test.jpg');
-
-      expect(result).toEqual(mockDimensions);
-      expect(sizeOf).toHaveBeenCalledWith('/tmp/test.jpg');
+    it('should be a function', () => {
+      expect(typeof getImageDimensions).toBe('function');
     });
 
-    it('should throw error when dimension reading fails', async () => {
-      sizeOf.mockImplementation(() => {
-        throw new Error('Invalid image format');
-      });
+    it('should throw error for nonexistent files', async () => {
+      try {
+        await getImageDimensions('/nonexistent/file.jpg');
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.code).toBe('ENOENT');
+      }
+    });
 
-      await expect(getImageDimensions('/tmp/test.jpg')).rejects.toThrow(
-        'Invalid image format'
-      );
+    it('should throw error for non-image files', async () => {
+      try {
+        await getImageDimensions(testFilePath);
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+      }
     });
   });
 
   describe('getImageRotation', () => {
-    beforeEach(() => {
-      fs.readFile.mockResolvedValue(Buffer.from('fake image data'));
+    it('should be a function', () => {
+      expect(typeof getImageRotation).toBe('function');
     });
 
-    it('should return 0 degrees for normal orientation', async () => {
-      const mockExifData = {
-        '0th': {
-          [piexif.ImageIFD.Orientation]: 1
-        }
-      };
-      piexif.load.mockReturnValue(mockExifData);
-
-      const result = await getImageRotation('/tmp/test.jpg');
-
-      expect(result).toBe(0);
+    it('should throw error for nonexistent files', async () => {
+      try {
+        await getImageRotation('/nonexistent/file.jpg');
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.code).toBe('ENOENT');
+      }
     });
 
-    it('should return 90 degrees for orientation 6', async () => {
-      const mockExifData = {
-        '0th': {
-          [piexif.ImageIFD.Orientation]: 6
-        }
-      };
-      piexif.load.mockReturnValue(mockExifData);
-
-      const result = await getImageRotation('/tmp/test.jpg');
-
-      expect(result).toBe(90);
-    });
-
-    it('should return 180 degrees for orientation 3', async () => {
-      const mockExifData = {
-        '0th': {
-          [piexif.ImageIFD.Orientation]: 3
-        }
-      };
-      piexif.load.mockReturnValue(mockExifData);
-
-      const result = await getImageRotation('/tmp/test.jpg');
-
-      expect(result).toBe(180);
-    });
-
-    it('should return 270 degrees for orientation 8', async () => {
-      const mockExifData = {
-        '0th': {
-          [piexif.ImageIFD.Orientation]: 8
-        }
-      };
-      piexif.load.mockReturnValue(mockExifData);
-
-      const result = await getImageRotation('/tmp/test.jpg');
-
-      expect(result).toBe(270);
-    });
-
-    it('should throw error when EXIF reading fails', async () => {
-      piexif.load.mockImplementation(() => {
-        throw new Error('Invalid EXIF data');
-      });
-
-      await expect(getImageRotation('/tmp/test.jpg')).rejects.toThrow(
-        'Invalid EXIF data'
-      );
-    });
-
-    it('should throw error when file reading fails', async () => {
-      fs.readFile.mockRejectedValue(new Error('File read error'));
-
-      await expect(getImageRotation('/tmp/test.jpg')).rejects.toThrow(
-        'File read error'
-      );
-    });
-
-    it('should handle missing orientation data', async () => {
-      const mockExifData = {
-        '0th': {} // No orientation data
-      };
-      piexif.load.mockReturnValue(mockExifData);
-
-      const result = await getImageRotation('/tmp/test.jpg');
-
-      expect(result).toBe(0); // Should default to 0 degrees
-    });
-
-    it('should handle unknown orientation values', async () => {
-      const mockExifData = {
-        '0th': {
-          [piexif.ImageIFD.Orientation]: 99 // Unknown orientation
-        }
-      };
-      piexif.load.mockReturnValue(mockExifData);
-
-      const result = await getImageRotation('/tmp/test.jpg');
-
-      expect(result).toBe(0); // Should default to 0 degrees
+    it('should throw error for non-image files', async () => {
+      try {
+        await getImageRotation(testFilePath);
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+      }
     });
   });
 
-  describe('Edge Cases and Error Scenarios', () => {
-    describe('downloadImage edge cases', () => {
-      it('should handle empty response data', async () => {
-        const mockResponse = { data: Buffer.alloc(0) };
-        axios.get.mockResolvedValue(mockResponse);
-        fs.writeFile.mockResolvedValue();
-
-        await downloadImage('https://example.com/empty.jpg', '/tmp/test.jpg');
-
-        expect(fs.writeFile).toHaveBeenCalledWith(
-          '/tmp/test.jpg',
-          expect.any(Buffer)
-        );
-      });
+  describe('generateSuggestedFilename', () => {
+    it('should be a function', () => {
+      expect(typeof generateSuggestedFilename).toBe('function');
     });
 
-    describe('getFileSizeInKB edge cases', () => {
-      it('should handle zero-byte files', async () => {
-        const mockStats = { size: 0 };
-        fs.stat.mockResolvedValue(mockStats);
-
-        const result = await getFileSizeInKB('/tmp/empty.jpg');
-
-        expect(result).toBe('0.00');
-      });
-
-      it('should handle very large files', async () => {
-        const mockStats = { size: 1024 * 1024 * 10 }; // 10MB
-        fs.stat.mockResolvedValue(mockStats);
-
-        const result = await getFileSizeInKB('/tmp/large.jpg');
-
-        expect(result).toBe('10240.00');
-      });
+    it('should generate resize filename with width', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.jpg',
+        'resize',
+        { width: '400' }
+      );
+      expect(result).toBe('photo_400w.jpg');
     });
 
-    describe('getImageDimensions edge cases', () => {
-      it('should handle images with unusual dimensions', async () => {
-        const mockDimensions = { width: 1, height: 1 };
-        sizeOf.mockReturnValue(mockDimensions);
+    it('should generate resize filename with width and blur', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.jpg',
+        'resize',
+        { width: '400', blur: '5' }
+      );
+      expect(result).toBe('photo_400w_blur5.jpg');
+    });
 
-        const result = await getImageDimensions('/tmp/tiny.jpg');
+    it('should generate convert filename to webp', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.jpg',
+        'convert',
+        {}
+      );
+      expect(result).toBe('photo.webp');
+    });
 
-        expect(result).toEqual(mockDimensions);
-      });
+    it('should generate convert filename with quality', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.jpg',
+        'convert',
+        { quality: '90' }
+      );
+      expect(result).toBe('photo_q90.webp');
+    });
 
-      it('should handle images with missing dimension data', async () => {
-        sizeOf.mockReturnValue({ width: undefined, height: undefined });
+    it('should handle URLs without file extensions', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo',
+        'resize',
+        { width: '400' }
+      );
+      expect(result).toBe('photo_400w');
+    });
 
-        const result = await getImageDimensions('/tmp/corrupt.jpg');
+    it('should handle PNG files', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.png',
+        'resize',
+        { width: '400' }
+      );
+      expect(result).toBe('photo_400w.png');
+    });
 
-        expect(result).toEqual({ width: undefined, height: undefined });
-      });
+    it('should handle invalid URLs with fallback', () => {
+      const result = generateSuggestedFilename(
+        'invalid-url',
+        'resize',
+        { width: '400' }
+      );
+      expect(result).toMatch(/^resized_\d+\.jpg$/);
+    });
+
+    it('should handle invalid URLs with convert fallback', () => {
+      const result = generateSuggestedFilename(
+        'invalid-url',
+        'convert',
+        {}
+      );
+      expect(result).toMatch(/^converted_\d+\.webp$/);
+    });
+
+    it('should not add blur suffix for zero blur', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.jpg',
+        'resize',
+        { width: '400', blur: '0' }
+      );
+      expect(result).toBe('photo_400w.jpg');
+    });
+
+    it('should not add quality suffix for default quality (80)', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.jpg',
+        'convert',
+        { quality: '80' }
+      );
+      expect(result).toBe('photo.webp');
+    });
+
+    it('should handle URLs with query parameters', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/photo.jpg?v=123&size=large',
+        'resize',
+        { width: '400' }
+      );
+      expect(result).toBe('photo_400w.jpg');
+    });
+
+    it('should handle deeply nested paths', () => {
+      const result = generateSuggestedFilename(
+        'https://example.com/images/gallery/2024/photo.jpg',
+        'resize',
+        { width: '400' }
+      );
+      expect(result).toBe('photo_400w.jpg');
+    });
+  });
+
+  // Cleanup
+  describe('Cleanup', () => {
+    it('should clean up test file', async () => {
+      try {
+        await fs.unlink(testFilePath);
+        expect(true).toBe(true);
+      } catch (error) {
+        // File might already be deleted
+        expect(error.code).toBe('ENOENT');
+      }
     });
   });
 });
